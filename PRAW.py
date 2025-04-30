@@ -8,3 +8,6 @@ reddit = praw.Reddit(
     # username = "YOUR_USERNAME",
     # password = "YOUR_PASSWORD"
 )
+
+
+print(reddit.read_only)
