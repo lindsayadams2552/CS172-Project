@@ -3,22 +3,37 @@ import json
 import requests
 import os
 import math
+# For the HTML cleaning
+import re
 from bs4 import BeautifulSoup
 
 # Create the folder
-dataFolder = "redditFiles"
-os.makedirs(dataFolder, exist_ok=True)
+folder_name = "redditFiles"
+if not os.path.exists(folder_name):
+    os.mkdir(folder_name)
 
-# Crawl HTML link in post or comment
-def getLink(url):
+# Remove HTML tags from raw HTML (for clean json)
+# Discussion Slides 4
+def clean_html(raw_html):
+    clean_text = re.sub('<.*?>', '', raw_html)
+    return clean_text
+
+# Crawl HTML link in post or comment 
+# (gets title and paragraph)
+def fetch_page_info(url):
     try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        return soup.title.string if soup.title else None
-    except Exception as e:
-        print(f"Error retrieving link from {url}: {e}")
-        return None
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        title = soup.title.string.strip() if soup.title else ""
+
+        # Try to grab some meaningful paragraph text (first <p> tag)
+        first_p = soup.find('p')
+        first_paragraph = first_p.get_text(strip=True) if first_p else ""
+
+        return title, first_paragraph
+    except requests.RequestException as e:
+        print(f"Error fetching {url}: {e}")
+        return None, None
 
 # Initialize crawler/Authentication
 reddit = praw.Reddit(
@@ -31,74 +46,98 @@ reddit = praw.Reddit(
 subreddit = reddit.subreddit("AskReddit+Science")
 
 # File sizing
-index = 0
-max_file_size = 10 * 1024 * 1024  # 10MB
-largest_total_size = 500 * 1024 * 1024  # 500MB
+file_idx = 0
+max_size = 10 * 1024 * 1024  # 10MB
+total_limit = 500 * 1024 * 1024  # 500MB total
 
-current_file = open(os.path.join(dataFolder, f"posts_{index}.jsonl"), "w", encoding="utf-8")
-current_size = 0
-total_size = 0
+current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
+cur_file = open(current_path, "w", encoding="utf-8")
+cur_size = 0
+sum_size = 0
+
+# Keep track of seen posts to avoid duplicates
+seen_posts = set()
 
 # Pair stream names with PRAW
-stream_pairs = [
-    ("top", subreddit.top(time_filter="all", limit=None)),
-    ("hot", subreddit.hot(limit=None)),
-    ("new", subreddit.new(limit=None)),
-    ("rising", subreddit.rising(limit=None))
-]
+streams = [subreddit.top(time_filter="all"), subreddit.hot(), subreddit.new(), subreddit.rising()]
+stream_labels = ["top", "hot", "new", "rising"]
 
-for stream_name, stream in stream_pairs:
+last_printed_mb = 0
+for idx, stream in enumerate(streams):
+    label = stream_labels[idx]
     for post in stream:
-        # Data dictionary of what we are retrieving
-        post_data = {
-            "body": post.selftext,
+        # For duplication
+        if post.id in seen_posts:
+            continue
+        seen_posts.add(post.id)
+
+        # Data dictionary of what we are retrieving (basic post info)
+        data = {
             "title": post.title,
-            "postID": post.id,
+            "body": clean_html(post.selftext),
+            "author": str(post.author) if post.author else "[deleted]",
             "upvotes": post.score,
+            "postID": post.id,
             "postImage": post.url,
             "postUrl": post.permalink,
-            "author": str(post.author),
             "comments": [],
-            "category": stream_name
+            "category": label
         }
 
-        # If a reddit post contains a URL to an html page, obtain/save info on that page
+        # If a reddit post contains a URL to an html page, get it and save it
         if post.url and not post.is_self:
-            html = getLink(post.url)
-            if html:
-                post_data["linkTitle"] = html #saves link to data dictionary
+            page_title, page_text = fetch_page_info(post.url)
+            if page_title:
+                data["linkTitle"] = page_title
+            if page_text and len(page_text) > 20:  # just saving "good" text
+                data["linkText"] = page_text
+
+        # Crawl Reddit permalink if it's a self-post (for redundancy)
+        if post.is_self and post.permalink:
+            try:
+                full_url = "https://www.reddit.com" + post.permalink
+                page_title2, page_text2 = fetch_page_info(full_url)
+                if page_title2:
+                    data["linkTitle"] = page_title2
+                if page_text2 and len(page_text2) > 20:
+                    data["linkText"] = page_text2
+            except Exception as e:
+                print(f"Self-post link error: {e}")
 
         # Crawl comments
         try:
             post.comments.replace_more(limit=0)
-            comments = []
-            for comment in post.comments.list():
-                comments.append(comment.body)
-                post_data["comments"] = comments
-        except Exception as e:
-            print(f"Error fetching comments for post {post.id}: {e}")
-
+            comments_list = []
+            for c in post.comments.list():
+                comments_list.append(c.body)
+            data["comments"] = comments_list
+        except Exception as err:
+            print(f"Comment fetch error: {err}")
 
         # Keeps track of how much space the file is using
-        line = json.dumps(post_data) + "\n"
-        line_bytes = len(line.encode('utf-8'))
+        line_data = json.dumps(data) + "\n"
+        cur_file.write(line_data)
+        cur_size += len(line_data.encode('utf-8'))
+        sum_size += len(line_data.encode('utf-8'))
+
         # When the json file exceeds 10MB, open a new one
-        if current_size + line_bytes > max_file_size:
-            current_file.close()
-            index += 1
-            current_file = open(os.path.join(dataFolder, f"posts_{index}.jsonl"), "w", encoding="utf-8")
-            current_size = 0
+        if cur_size > max_size:
+            cur_file.close()
+            file_idx += 1
+            current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
+            cur_file = open(current_path, "w", encoding="utf-8")
+            cur_size = 0
 
         # Keeps track of current file size in terminal so we can know when it reaches 10mb/500mb
-        current_file.write(line)
-        current_size += line_bytes
-        total_size += line_bytes
-        print(f"Collected {total_size / (1024 * 1024):.2f} MB so far...", end="\r")
+        current_mb = sum_size / (1024 * 1024)  # floating division
+        if current_mb - last_printed_mb >= 0.1:  # every 0.1MB
+            print(f"Downloaded {current_mb:.1f} MB...")
+            last_printed_mb = current_mb
 
-        if total_size >= largest_total_size:
+        if sum_size >= total_limit:
             break
-    if total_size >= largest_total_size:
+    if sum_size >= total_limit:
         break
 
-current_file.close()
-print("Crawling has finished.")
+cur_file.close()
+print("Crawling Done.")
