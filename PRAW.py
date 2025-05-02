@@ -20,20 +20,23 @@ def clean_html(raw_html):
 
 # Crawl HTML link in post or comment 
 # (gets title and paragraph)
-def fetch_page_info(url):
+def fetch_page_title(url):
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        title = soup.title.string.strip() if soup.title else ""
+        r.encoding = 'utf-8'
 
-        # Try to grab some meaningful paragraph text (first <p> tag)
-        first_p = soup.find('p')
-        first_paragraph = first_p.get_text(strip=True) if first_p else ""
+        # Only parse if it's HTML
+        if "text/html" in r.headers.get("Content-Type", ""):
+            soup = BeautifulSoup(r.text, 'html.parser')
+            title = soup.title.string.strip() if soup.title else ""
+            return title
+        else:
+            print(f"Skipped non-HTML content at {url}")
+            return None
 
-        return title, first_paragraph
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}")
-        return None, None
+        return None
 
 # Initialize crawler/Authentication
 reddit = praw.Reddit(
@@ -42,8 +45,8 @@ reddit = praw.Reddit(
     user_agent="macOS:my172Crawler:1.0 (by /u/flurfsky)"
 )
 
-# Subreddits
-subreddit = reddit.subreddit("AskReddit+Science")
+# List of subreddits to crawl
+subreddits = ["college", "ApplyingToCollege", "CollegeAdmissions", "CollegeRant", "CollegeMajors"]
 
 # File sizing
 file_idx = 0
@@ -58,86 +61,89 @@ sum_size = 0
 # Keep track of seen posts to avoid duplicates
 seen_posts = set()
 
-# Pair stream names with PRAW
-streams = [subreddit.top(time_filter="all"), subreddit.hot(), subreddit.new(), subreddit.rising()]
+# Initialize labels for stream types
 stream_labels = ["top", "hot", "new", "rising"]
 
 last_printed_mb = 0
-for idx, stream in enumerate(streams):
-    label = stream_labels[idx]
-    for post in stream:
-        # For duplication
-        if post.id in seen_posts:
-            continue
-        seen_posts.add(post.id)
 
-        # Data dictionary of what we are retrieving (basic post info)
-        data = {
-            "title": post.title,
-            "body": clean_html(post.selftext),
-            "author": str(post.author) if post.author else "[deleted]",
-            "upvotes": post.score,
-            "postID": post.id,
-            "postImage": post.url,
-            "postUrl": post.permalink,
-            "comments": [],
-            "category": label
-        }
+# Crawl subreddits defined above
+for sub in subreddits:
+    subreddit = reddit.subreddit(sub)
+    # Pair stream names with PRAW
+    streams = [subreddit.top(time_filter="all"), subreddit.hot(), subreddit.new(), subreddit.rising()]
 
-        # If a reddit post contains a URL to an html page, get it and save it
-        if post.url and not post.is_self:
-            page_title, page_text = fetch_page_info(post.url)
-            if page_title:
-                data["linkTitle"] = page_title
-            if page_text and len(page_text) > 20:  # just saving "good" text
-                data["linkText"] = page_text
+    for idx, stream in enumerate(streams):
+        label = stream_labels[idx]
+        for post in stream:
+            # For duplication
+            if post.id in seen_posts:
+                continue
+            seen_posts.add(post.id)
 
-        # Crawl Reddit permalink if it's a self-post (for redundancy)
-        if post.is_self and post.permalink:
+            # Data dictionary of what we are retrieving (basic post info)
+            data = {
+                "subreddit": sub,
+                "title": post.title,
+                "body": clean_html(post.selftext),
+                "author": str(post.author) if post.author else "[deleted]",
+                "upvotes": post.score,
+                "postID": post.id,
+                "postImage": post.url,
+                "postUrl": post.permalink,
+                "comments": [],
+                "category": label
+            }
+
+            # If a reddit post contains a URL to an html page, get it and save it
+            if post.url and not post.is_self:
+                page_title = fetch_page_title(post.url)
+                if page_title:
+                    data["linkTitle"] = page_title
+
+            # Crawl Reddit permalink if it's a self-post (for redundancy)
+            if post.is_self and post.permalink:
+                try:
+                    full_url = "https://www.reddit.com" + post.permalink
+                    page_title2 = fetch_page_title(full_url)
+                    if page_title2:
+                        data["linkTitle"] = page_title2
+                except Exception as e:
+                    print(f"Self-post link error: {e}")
+
+            # Crawl comments
             try:
-                full_url = "https://www.reddit.com" + post.permalink
-                page_title2, page_text2 = fetch_page_info(full_url)
-                if page_title2:
-                    data["linkTitle"] = page_title2
-                if page_text2 and len(page_text2) > 20:
-                    data["linkText"] = page_text2
-            except Exception as e:
-                print(f"Self-post link error: {e}")
+                post.comments.replace_more(limit=0)
+                comments_list = []
+                for c in post.comments.list()[:100]:  # Only first 100 comments
+                    comments_list.append(c.body)
+                data["comments"] = comments_list
+            except Exception as err:
+                print(f"Comment fetch error: {err}")
 
-        # Crawl comments
-        try:
-            post.comments.replace_more(limit=0)
-            comments_list = []
-            for c in post.comments.list():
-                comments_list.append(c.body)
-            data["comments"] = comments_list
-        except Exception as err:
-            print(f"Comment fetch error: {err}")
+            # Keeps track of how much space the file is using
+            line_data = json.dumps(data) + "\n"
+            cur_file.write(line_data)
+            cur_size += len(line_data.encode('utf-8'))
+            sum_size += len(line_data.encode('utf-8'))
 
-        # Keeps track of how much space the file is using
-        line_data = json.dumps(data) + "\n"
-        cur_file.write(line_data)
-        cur_size += len(line_data.encode('utf-8'))
-        sum_size += len(line_data.encode('utf-8'))
+            # When the json file exceeds 10MB, open a new one
+            if cur_size > max_size:
+                cur_file.close()
+                file_idx += 1
+                current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
+                cur_file = open(current_path, "w", encoding="utf-8")
+                cur_size = 0
 
-        # When the json file exceeds 10MB, open a new one
-        if cur_size > max_size:
-            cur_file.close()
-            file_idx += 1
-            current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
-            cur_file = open(current_path, "w", encoding="utf-8")
-            cur_size = 0
+            # Keeps track of current file size in terminal so we can know when it reaches 10mb/500mb
+            current_mb = sum_size / (1024 * 1024)
+            if current_mb - last_printed_mb >= 0.1:
+                print(f"Downloaded {current_mb:.1f} MB...")
+                last_printed_mb = current_mb
 
-        # Keeps track of current file size in terminal so we can know when it reaches 10mb/500mb
-        current_mb = sum_size / (1024 * 1024)  # floating division
-        if current_mb - last_printed_mb >= 0.1:  # every 0.1MB
-            print(f"Downloaded {current_mb:.1f} MB...")
-            last_printed_mb = current_mb
-
+            if sum_size >= total_limit:
+                break
         if sum_size >= total_limit:
             break
-    if sum_size >= total_limit:
-        break
 
 cur_file.close()
 print("Crawling Done.")
