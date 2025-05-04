@@ -2,10 +2,12 @@ import praw
 import json
 import requests
 import os
-import math
+import math 
 # For the HTML cleaning
 import re
 from bs4 import BeautifulSoup
+# For multithreading
+from concurrent.futures import ThreadPoolExecutor
 
 # Create the folder
 folder_name = "redditFiles"
@@ -19,9 +21,10 @@ def clean_html(raw_html):
     return clean_text
 
 # Crawl HTML link in post or comment 
-# (gets title and paragraph)
+# Cite: https://beautiful-soup-4.readthedocs.io/en/latest/
 def fetch_page_title(url):
     try:
+        # Cite: https://www.zenrows.com/blog/python-requests-user-agent#random-user-agent
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         r.encoding = 'utf-8'
 
@@ -38,7 +41,20 @@ def fetch_page_title(url):
         print(f"Error fetching {url}: {e}")
         return None
 
+# Fetch all comments in parallel (multithreading for speed)
+def fetch_comments(post):
+    try:
+        post.comments.replace_more(limit=None)
+        comments_list = []
+        for c in post.comments.list(): 
+            comments_list.append(c.body)
+        return comments_list
+    except Exception as err:
+        print(f"Comment fetch error: {err}")
+        return []
+
 # Initialize crawler/Authentication
+# Cite: https://praw.readthedocs.io/en/stable/getting_started/quick_start.html
 reddit = praw.Reddit(
     client_id="SXtk1VW7Lw90s7AxtAO4yA",
     client_secret="rp6k-MH3NOjJWC3RgY16WLi3RhPUbg",
@@ -46,12 +62,13 @@ reddit = praw.Reddit(
 )
 
 # List of subreddits to crawl
-subreddits = ["college", "ApplyingToCollege", "CollegeAdmissions", "CollegeRant", "CollegeMajors"]
+subreddits = ["lotr", "fanfiction", "gameofthrones", "shipping", "HaileyBaldwinSnark", "LAinfluencersnark", "NYCinfluencersnark", "TrueFilm", "realitytv", "indieheads", "popculture", "hiphopheads", "podcasts", "socialmedia", "influencersnark", "LetsTalkMusic", "truegaming", "books", "Fantasy", "youtubers", "oscarrace", "grammys", "literature", "patientgamers", "CallHerDaddy", "truecrime", "TrueFilm", "boxoffice", "awardseason", "Metal", "EDM", "rap", "unpopularopinion", "Twitch", "JohnSummit", "Entertainment", "thebachelor", "patientgamers",
+"CallHerDaddy", "truecrime", "TrueFilm"]
 
 # File sizing
 file_idx = 0
 max_size = 10 * 1024 * 1024  # 10MB
-total_limit = 500 * 1024 * 1024  # 500MB total
+total_limit = 550 * 1024 * 1024  # 550MB total
 
 current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
 cur_file = open(current_path, "w", encoding="utf-8")
@@ -62,88 +79,140 @@ sum_size = 0
 seen_posts = set()
 
 # Initialize labels for stream types
+# Cite: https://www.reddit.com/dev/api/#section_listing
 stream_labels = ["top", "hot", "new", "rising"]
 
 last_printed_mb = 0
 
-# Crawl subreddits defined above
+# Create a thread pool for parallel HTML and comment fetching
+executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 5)
+future_to_data = []
+
+# Crawl subreddits
+# Crawl subreddits
 for sub in subreddits:
     subreddit = reddit.subreddit(sub)
     # Pair stream names with PRAW
-    streams = [subreddit.top(time_filter="all"), subreddit.hot(), subreddit.new(), subreddit.rising()]
+    streams = [
+        subreddit.top(time_filter="all"), 
+        subreddit.hot(), 
+        subreddit.new(), 
+        subreddit.rising()
+    ]
 
     for idx, stream in enumerate(streams):
         label = stream_labels[idx]
-        for post in stream:
-            # For duplication
-            if post.id in seen_posts:
-                continue
-            seen_posts.add(post.id)
+        print(f"\nNow crawling {sub} - {label}...")  # New: print where you are
 
-            # Data dictionary of what we are retrieving (basic post info)
-            data = {
-                "subreddit": sub,
-                "title": post.title,
-                "body": clean_html(post.selftext),
-                "author": str(post.author) if post.author else "[deleted]",
-                "upvotes": post.score,
-                "postID": post.id,
-                "postImage": post.url,
-                "postUrl": post.permalink,
-                "comments": [],
-                "category": label
-            }
+        post_count = 0  # New: count posts crawled in this stream
 
-            # If a reddit post contains a URL to an html page, get it and save it
-            if post.url and not post.is_self:
-                page_title = fetch_page_title(post.url)
-                if page_title:
-                    data["linkTitle"] = page_title
+        try:
+            for post in stream:
+                post_count += 1
 
-            # Crawl Reddit permalink if it's a self-post (for redundancy)
-            if post.is_self and post.permalink:
-                try:
-                    full_url = "https://www.reddit.com" + post.permalink
-                    page_title2 = fetch_page_title(full_url)
-                    if page_title2:
-                        data["linkTitle"] = page_title2
-                except Exception as e:
-                    print(f"Self-post link error: {e}")
+                # For duplication
+                if post.id in seen_posts:
+                    continue
+                seen_posts.add(post.id)
 
-            # Crawl comments
-            try:
-                post.comments.replace_more(limit=0)
-                comments_list = []
-                for c in post.comments.list()[:100]:  # Only first 100 comments
-                    comments_list.append(c.body)
-                data["comments"] = comments_list
-            except Exception as err:
-                print(f"Comment fetch error: {err}")
+                # Data dictionary of what we are retrieving
+                data = {
+                    "subreddit": sub,
+                    "title": post.title,
+                    "body": clean_html(post.selftext),
+                    "author": str(post.author) if post.author else "[deleted]",
+                    "upvotes": post.score,
+                    "postID": post.id,
+                    "postImage": post.url,
+                    "postUrl": post.permalink,
+                    "comments": [],
+                    "category": label
+                }
 
-            # Keeps track of how much space the file is using
-            line_data = json.dumps(data) + "\n"
-            cur_file.write(line_data)
-            cur_size += len(line_data.encode('utf-8'))
-            sum_size += len(line_data.encode('utf-8'))
+                # If a reddit post contains a URL to an html page, get it and save it
+                if post.url and not post.is_self:
+                    future_title = executor.submit(fetch_page_title, post.url)
+                    data["future_linkTitle"] = future_title
+                # Crawl Reddit permalink if it's a self-post
+                elif post.is_self and post.permalink:
+                    try:
+                        full_url = "https://www.reddit.com" + post.permalink
+                        future_title = executor.submit(fetch_page_title, full_url)
+                        data["future_linkTitle"] = future_title
+                    except Exception as e:
+                        print(f"Self-post link error: {e}")
+                        data["future_linkTitle"] = None
+                else:
+                    data["future_linkTitle"] = None
 
-            # When the json file exceeds 10MB, open a new one
-            if cur_size > max_size:
-                cur_file.close()
-                file_idx += 1
-                current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
-                cur_file = open(current_path, "w", encoding="utf-8")
-                cur_size = 0
+                # Crawl comments
+                future_comments = executor.submit(fetch_comments, post)
+                data["future_comments"] = future_comments
 
-            # Keeps track of current file size in terminal so we can know when it reaches 10mb/500mb
-            current_mb = sum_size / (1024 * 1024)
-            if current_mb - last_printed_mb >= 0.1:
-                print(f"Downloaded {current_mb:.1f} MB...")
-                last_printed_mb = current_mb
+                # Save to future list for later writing
+                future_to_data.append(data)
 
-            if sum_size >= total_limit:
-                break
+                # Live MB estimate during crawling
+                line_data_estimate = json.dumps({k: v for k, v in data.items() if not k.startswith('future_')}) + "\n"
+                estimated_size = len(line_data_estimate.encode('utf-8'))
+
+                sum_size += estimated_size
+
+                current_mb = sum_size / (1024 * 1024)
+                if current_mb - last_printed_mb >= 0.1:
+                    print(f"Downloaded {current_mb:.1f} MB...")
+                    last_printed_mb = current_mb
+
+                if sum_size >= total_limit:
+                    break
+        except Exception as e:
+            print(f"Error crawling {sub} - {label}: {e}")
+
+        if post_count == 0:
+            print(f"No posts found in {sub} - {label}")
+        
         if sum_size >= total_limit:
             break
 
+    if sum_size >= total_limit:
+        break
+
+
+# Collect all completed futures
+for data in future_to_data:
+    # Wait for comment fetching
+    if data["future_comments"]:
+        data["comments"] = data["future_comments"].result()
+    # Wait for link title fetching
+    if data["future_linkTitle"]:
+        title_result = data["future_linkTitle"].result()
+        if title_result:
+            data["linkTitle"] = title_result
+
+    # Remove futures before saving to file
+    data.pop("future_comments", None)
+    data.pop("future_linkTitle", None)
+
+    # Keeps track of how much space the file is using
+    line_data = json.dumps(data) + "\n"
+    cur_file.write(line_data)
+    cur_size += len(line_data.encode('utf-8'))
+    sum_size += len(line_data.encode('utf-8'))
+
+    # When the json file exceeds 10MB, open a new one
+    if cur_size > max_size:
+        cur_file.close()
+        file_idx += 1
+        current_path = os.path.join(folder_name, f"posts_{file_idx}.jsonl")
+        cur_file = open(current_path, "w", encoding="utf-8")
+        cur_size = 0
+
+    # Keeps track of current file size in terminal so we can know when it reaches 10mb/550mb
+    current_mb = sum_size / (1024 * 1024)
+    if current_mb - last_printed_mb >= 0.1:
+        print(f"Downloaded {current_mb:.1f} MB...")
+        last_printed_mb = current_mb
+
 cur_file.close()
+executor.shutdown()
 print("Crawling Done.")
