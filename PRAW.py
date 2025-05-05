@@ -3,6 +3,7 @@ import json
 import requests
 import os
 import math 
+import time
 # For the HTML cleaning
 import re
 from bs4 import BeautifulSoup
@@ -24,8 +25,19 @@ def clean_html(raw_html):
 # (gets title and paragraph)
 def fetch_page_title(url):
     try:
+        # Assures reddit pages are not overlooked
+        if url.startswith("/r/"):
+            url = "https://www.reddit.com" + url
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+
+        if r.status_code == 429:
+            print(f"429 Too Many Requests, sleeping now!")
+            time.sleep(7)  # sleep 5 seconds
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+
         r.encoding = 'utf-8'
+        # prevent 429 error
+        time.sleep(2)
 
         # Only parse if it's HTML
         if "text/html" in r.headers.get("Content-Type", ""):
@@ -60,7 +72,7 @@ reddit = praw.Reddit(
 )
 
 # List of subreddits to crawl
-subreddits = ["college", "ApplyingToCollege", "CollegeAdmissions", "CollegeRant", "CollegeMajors"]
+subreddits = ["entertainment", "socialmedia", "rap", "literature", "popculture", "celebrities", "Oscars", "radio", "netflix", "indieheads", "hiphopheads", "podcasts", "InfluencerSnark", "LetsTalkMusic", "truegaming","Fantasy","oscarrace","grammys","Metal","EDM", "Jazz", "rock"]
 
 # File sizing
 file_idx = 0
@@ -81,7 +93,7 @@ stream_labels = ["top", "hot", "new", "rising"]
 last_printed_mb = 0
 
 # Create a thread pool for parallel HTML and comment fetching
-executor = ThreadPoolExecutor(max_workers=os.cpu_count() * 5)  # maximizing CPU firepower
+executor = ThreadPoolExecutor(max_workers=3)  # maximizing CPU firepower
 
 future_to_data = []
 
