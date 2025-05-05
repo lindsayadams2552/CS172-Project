@@ -72,7 +72,7 @@ reddit = praw.Reddit(
 )
 
 # List of subreddits to crawl
-subreddits = ["entertainment", "socialmedia", "rap", "literature", "popculture", "celebrities", "Oscars", "radio", "netflix", "indieheads", "hiphopheads", "podcasts", "InfluencerSnark", "LetsTalkMusic", "truegaming","Fantasy","oscarrace","grammys","Metal","EDM", "Jazz", "rock"]
+subreddits = ["books", "pcgaming", "Games", "PS4", "halo", "Hulu", "HBOMAX", "animesuggest", "horrorlit", "InternetIsBeautiful", "startrek", "booksuggestions", "MovieSuggestions", "bestofnetflix", "thesopranos", "SubredditDrama", "thesopranos", "SubredditDrama"]
 
 # File sizing
 file_idx = 0
