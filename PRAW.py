@@ -72,7 +72,7 @@ reddit = praw.Reddit(
 )
 
 # List of subreddits to crawl
-subreddits = ["suggestmeabook", "riverdale", "TheTraitors", "olympics", "RedditWritesSeinfeld", "spotify", "TheTraitors", "TrueCrimePodcasts", "tolkienfans", "MuseumOfReddit", "tldr", "kpophelp", "asoiaf", "scrubs", "WikiLeaks", "serialpodcast", "AskReddit", "wikipedia", "discordapp", "Shoestring", "HobbyDrama", "politics"]
+subreddits = ["movies", "television", "NetflixBestOf", "popheads", "hiphopheads", "Music", "gaming", "PS5", "NintendoSwitch", "popculturechat", "OutOfTheLoop", "comicbooks", "anime", "MarvelStudios", "StarWars," "TheLastOfUs", "marvelstudiosspoilers", "televisioncriticism", "moviescirclejerk", "MusicDiscussion", "KDRAMA", "funny", "reactiongifs", "90s", "80s", "Documentaries", "entertainment", "socialmedia", "rap", "literature", "popculture", "celebrities", "Oscars", "radio", "netflix", "indieheads", "podcasts", "InfluencerSnark", "LetsTalkMusic", "truegaming", "Fantasy", "oscarrace", "grammys", "Metal", "EDM", "Jazz", "rock", "books", "pcgaming", "Games", "PS4", "halo", "Hulu", "HBOMAX", "animesuggest", "horrorlit", "InternetIsBeautiful", "startrek", "booksuggestions", "MovieSuggestions", "bestofnetflix", "thesopranos", "SubredditDrama", "Suggestmeabook", "riverdale", "TheTraitors", "olympics", "RedditWritesSeinfeld", "spotify", "TheTraitors", "TrueCrimePodcasts", "tolkienfans", "MuseumOfReddit", "tldr", "kpophelp", "asoiaf", "scrubs", "WikiLeaks", "serialpodcast", "AskReddit", "wikipedia", "discordapp", "Shoestring", "HobbyDrama", "politics"]
 
 # File sizing
 file_idx = 0
