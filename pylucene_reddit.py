@@ -3,15 +3,20 @@ import json
 import time
 import lucene
 import os
+
 from java.nio.file import Paths
 from java.lang import Float
 from java.util import HashMap
-from org.apache.lucene.store import SimpleFSDirectory, NIOFSDirectory
+
+from org.apache.lucene.store import NIOFSDirectory, SimpleFSDirectory
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.analysis.miscellaneous import PerFieldAnalyzerWrapper
 from org.apache.lucene.document import Document, Field, FieldType
-from org.apache.lucene.index import FieldInfo, IndexWriter, IndexWriterConfig, IndexOptions, DirectoryReader
-from org.apache.lucene.queryparser.classic import MultiFieldQueryParser
+from org.apache.lucene.index import (
+    FieldInfo, IndexWriter, IndexWriterConfig,
+    IndexOptions, DirectoryReader
+)
+from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # correct parser class
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.search.similarities import BM25Similarity
 
@@ -34,9 +39,9 @@ def load_files(directory):
 def create_index(index_dir, reddit_files):
     if not os.path.exists(index_dir):
         os.mkdir(index_dir)
+
     store = SimpleFSDirectory(Paths.get(index_dir))
     analyzer = PerFieldAnalyzerWrapper(StandardAnalyzer())
-
     config = IndexWriterConfig(analyzer)
     config.setOpenMode(IndexWriterConfig.OpenMode.CREATE)
     config.setSimilarity(BM25Similarity())
@@ -97,22 +102,25 @@ def create_index(index_dir, reddit_files):
     writer.close()
     print(f"Indexing complete. Total: {count} docs in {time.time() - start:.2f} sec")
 
-# fix
-def retrieve(index_dir, query):
+# retrieves search results using Lucene query
+def retrieve(index_dir, user_query):
+    from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # do it here to avoid shadowing
+
+    vm_env = lucene.getVMEnv()
+    if not vm_env.isCurrentThreadAttached():
+        vm_env.attachCurrentThread()
+
     search_dir = NIOFSDirectory(Paths.get(index_dir))
     searcher = IndexSearcher(DirectoryReader.open(search_dir))
     searcher.setSimilarity(BM25Similarity())
 
     fields = ['Title', 'Body', 'Comments']
-    boosts = HashMap()
-    boosts.put("Title", Float(2.0))   # boost title matches
-    boosts.put("Body", Float(1.0))
-    boosts.put("Comments", Float(1.0))
+    analyzer = StandardAnalyzer()
+    qparser = MultiFieldQueryParser(fields, analyzer)  # DO NOT name this `MultiFieldQueryParser` again
 
-    parser = MultiFieldQueryParser(fields, StandardAnalyzer(), boosts)
-    parsed_query = parser.parse(query)
+    query = qparser.parse(user_query.strip())  # use .parse() correctly on the instance
 
-    topDocs = searcher.search(parsed_query, 10).scoreDocs
+    topDocs = searcher.search(query, 10).scoreDocs
     results = []
     for hit in topDocs:
         doc = searcher.doc(hit.doc)
@@ -127,7 +135,8 @@ def retrieve(index_dir, query):
         })
     return results
 
-# Execution (indexing step only)
+# main indexing entry point
 if __name__ == "__main__":
-    lucene.initVM(vmargs=['-Djava.awt.headless=true'])
+    if lucene.getVMEnv() is None:
+        lucene.initVM(vmargs=['-Djava.awt.headless=true'])
     create_index('reddit_lucene_index/', load_files("redditFiles/"))
