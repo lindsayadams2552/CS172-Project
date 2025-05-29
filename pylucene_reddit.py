@@ -20,6 +20,7 @@ from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # corre
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.search.similarities import BM25Similarity
 
+# ensuring that there is no spam in the output
 logging.disable(sys.maxsize)
 
 # load in reddit json data
@@ -32,10 +33,11 @@ def load_files(directory):
                     try:
                         yield json.loads(line)
                     except json.JSONDecodeError:
-                        continue
+                        continue #if there are wrong lines, just skip them
         except Exception as e:
             print(f"Error reading {path}: {e}")
 
+# lucene index from the data from reddit in the JSON files 
 def create_index(index_dir, reddit_files):
     if not os.path.exists(index_dir):
         os.mkdir(index_dir)
@@ -88,6 +90,7 @@ def create_index(index_dir, reddit_files):
         doc.add(Field('PostImage', str(post.get('postImage', '')), stored_only))
         doc.add(Field('PostURL', str(post.get('postUrl', '')), stored_only))
 
+        # comments will be handled 
         comments = post.get('comments', [])
         if isinstance(comments, list):
             comments = "\n".join(comments)
