@@ -16,9 +16,11 @@ from org.apache.lucene.index import (
     FieldInfo, IndexWriter, IndexWriterConfig,
     IndexOptions, DirectoryReader
 )
-from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # correct parser class
+from org.apache.lucene.queryparser.classic import MultiFieldQueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.search.similarities import BM25Similarity
+
+print(">>> LOADING pylucene_reddit from:", __file__)
 
 # ensuring that there is no spam in the output
 logging.disable(sys.maxsize)
@@ -107,7 +109,7 @@ def create_index(index_dir, reddit_files):
 
 # retrieves search results using Lucene query
 def retrieve(index_dir, user_query):
-    from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # do it here to avoid shadowing
+    # from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # do it here to avoid shadowing
 
     vm_env = lucene.getVMEnv()
     if not vm_env.isCurrentThreadAttached():
@@ -119,9 +121,10 @@ def retrieve(index_dir, user_query):
 
     fields = ['Title', 'Body', 'Comments']
     analyzer = StandardAnalyzer()
-    qparser = MultiFieldQueryParser(fields, analyzer)  # DO NOT name this `MultiFieldQueryParser` again
+    query_parser = MultiFieldQueryParser(fields, analyzer) # DO NOT name this `MultiFieldQueryParser` again
+    print(">>> parser object is:", parser, "of type", type(parser))
 
-    query = qparser.parse(user_query.strip())  # use .parse() correctly on the instance
+    query = query_parser.parse(user_query.strip()) # use .parse() correctly on the instance
 
     topDocs = searcher.search(query, 10).scoreDocs
     results = []
