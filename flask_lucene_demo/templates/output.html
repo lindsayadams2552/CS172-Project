@@ -1,0 +1,39 @@
+<!-- {% for item in lucene_output %}
+    <h2>Score: {{ item['score'] }}</h2>
+    <h3>Title: {{ item['title'] }}</h3>
+    <p><strong>Body:</strong> {{ item['body'] }}</p>
+    <p><strong>Subreddit:</strong> {{ item['subreddit'] }}</p>
+    <p><strong>Author:</strong> {{ item['username'] }}</p>
+    <p><a href="https://www.reddit.com{{ item['url'] }}" target="_blank">View Post</a></p>
+    <hr>
+{% endfor %}
+
+<form action="/input" method="GET">
+    <p><input type="submit" value="Search Again" /></p>
+</form> -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Results</title>
+</head>
+<body>
+    <h1>Results</h1>
+    {% if lucene_output %}
+        <ul>
+        {% for doc in lucene_output %}
+            <li>
+                <strong>{{ doc.title }}</strong><br>
+                <em>{{ doc.subreddit }}</em><br>
+                {{ doc.body }}<br>
+                <a href="{{ doc.url }}">View Post</a><br>
+                <hr>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No results found.</p>
+    {% endif %}
+    <a href="/input">Search again</a>
+</body>
+</html>
