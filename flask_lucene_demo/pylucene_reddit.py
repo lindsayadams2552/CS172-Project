@@ -1,6 +1,7 @@
 import logging, sys
 import json
 import time
+import math
 import lucene
 import os
 
@@ -11,7 +12,10 @@ from java.util import HashMap
 from org.apache.lucene.store import NIOFSDirectory, SimpleFSDirectory
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.analysis.miscellaneous import PerFieldAnalyzerWrapper
-from org.apache.lucene.document import Document, Field, FieldType
+from org.apache.lucene.document import (
+    Document, Field, FieldType,
+    LongPoint, StoredField
+)
 from org.apache.lucene.index import (
     FieldInfo, IndexWriter, IndexWriterConfig,
     IndexOptions, DirectoryReader
@@ -22,10 +26,9 @@ from org.apache.lucene.search.similarities import BM25Similarity
 
 print(">>> LOADING pylucene_reddit from:", __file__)
 
-# ensuring that there is no spam in the output
+# suppress all Lucene logging
 logging.disable(sys.maxsize)
 
-# load in reddit json data
 def load_files(directory):
     for file_name in os.listdir(directory):
         path = os.path.join(directory, file_name)
@@ -35,11 +38,10 @@ def load_files(directory):
                     try:
                         yield json.loads(line)
                     except json.JSONDecodeError:
-                        continue #if there are wrong lines, just skip them
+                        continue
         except Exception as e:
             print(f"Error reading {path}: {e}")
 
-# lucene index from the data from reddit in the JSON files 
 def create_index(index_dir, reddit_files):
     if not os.path.exists(index_dir):
         os.mkdir(index_dir)
@@ -51,35 +53,30 @@ def create_index(index_dir, reddit_files):
     config.setSimilarity(BM25Similarity())
     writer = IndexWriter(store, config)
 
-    # handle Lucene fields that will be tokenized (match doesn't have to be exact)
+    # field types
     tokenized = FieldType()
     tokenized.setStored(True)
     tokenized.setTokenized(True)
     tokenized.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS)
 
-    # handle Lucene fields that won't be tokenized (for exact matches)
     not_tokenized = FieldType()
     not_tokenized.setStored(True)
     not_tokenized.setTokenized(False)
     not_tokenized.setIndexOptions(IndexOptions.DOCS_AND_FREQS)
 
-    # comments field (don't want to store it bc it's rly big)
     comments_field = FieldType()
     comments_field.setStored(False)
     comments_field.setTokenized(True)
     comments_field.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS)
 
-    # handle Lucene fields that are only stored (not tokenized or indexed)
     stored_only = FieldType()
     stored_only.setStored(True)
     stored_only.setTokenized(False)
     stored_only.setIndexOptions(IndexOptions.NONE)
 
-    # Outputs to terminal to help see how much was processed
     count = 0
     start = time.time()
 
-    # added field types for indexing (from data dictionary)
     for post in reddit_files:
         doc = Document()
         doc.add(Field('Title', str(post.get('title', '')), tokenized))
@@ -92,13 +89,16 @@ def create_index(index_dir, reddit_files):
         doc.add(Field('PostImage', str(post.get('postImage', '')), stored_only))
         doc.add(Field('PostURL', str(post.get('postUrl', '')), stored_only))
 
-        # comments will be handled 
         comments = post.get('comments', [])
         if isinstance(comments, list):
             comments = "\n".join(comments)
         doc.add(Field('Comments', str(comments), comments_field))
 
-        # Outputs to terminal to help see how much was processed
+        # --- ADD TIMESTAMP FIELD for recency scoring ---
+        ts = int(post.get('created_utc', time.time()))
+        doc.add(LongPoint("Timestamp", ts))    # enable numeric range queries
+        doc.add(StoredField("Timestamp", ts))  # so we can read it in retrieve()
+
         writer.addDocument(doc)
         count += 1
         if count % 1000 == 0:
@@ -107,13 +107,14 @@ def create_index(index_dir, reddit_files):
     writer.close()
     print(f"Indexing complete. Total: {count} docs in {time.time() - start:.2f} sec")
 
-# retrieves search results using Lucene query
 def retrieve(index_dir, user_query):
-    # from org.apache.lucene.queryparser.classic import MultiFieldQueryParser  # do it here to avoid shadowing
+    # Ranking = 0.7·BM25_score + 0.3·exp(−age_days/7)
+    # where age_days = (now − Timestamp)/86400, so posts ~1 week old have recency ≈0.5
 
-    # vm_env = lucene.getVMEnv()
-    # if not vm_env.isCurrentThreadAttached():
-    #     vm_env.attachCurrentThread()
+    # ensure current thread is attached if called from Flask
+    vm_env = lucene.getVMEnv()
+    if not vm_env.isCurrentThreadAttached():
+        vm_env.attachCurrentThread()
 
     search_dir = NIOFSDirectory(Paths.get(index_dir))
     searcher = IndexSearcher(DirectoryReader.open(search_dir))
@@ -121,40 +122,51 @@ def retrieve(index_dir, user_query):
 
     fields = ['Title', 'Body', 'Comments']
     analyzer = StandardAnalyzer()
-    query_parser = MultiFieldQueryParser(fields, analyzer) # DO NOT name this `MultiFieldQueryParser` again
-    query = MultiFieldQueryParser.parse(query_parser, user_query)
- 
-    # print(type(user_query))
-    # query = query_parser.parse(user_query) # use .parse() correctly on the instance
+    qp = MultiFieldQueryParser(fields, analyzer)
+    query = MultiFieldQueryParser.parse(qp, user_query)
 
     topDocs = searcher.search(query, 30).scoreDocs
     results = []
+    seen = set()
 
-    seen_titles = set()  # Track PostIDs to filter duplicates
+    now = time.time()
+    alpha = 0.7
 
-    # No duplicate results
     for hit in topDocs:
-        doc = searcher.doc(hit.doc)
-        title_text = doc.get("Title")
-        if title_text in seen_titles:
+        doc   = searcher.doc(hit.doc)
+        title = doc.get("Title")
+        if title in seen:
             continue
-        seen_titles.add(title_text)
-    
+        seen.add(title)
+
+        # compute recency (guard against missing Timestamp)
+        raw_ts = doc.get("Timestamp")
+        if raw_ts is None:
+            ts = now
+        else:
+            ts = float(raw_ts)
+
+        age_days = (now - ts) / 86400.0
+        recency  = math.exp(-age_days / 7.0)
+        final_score = alpha * hit.score + (1 - alpha) * recency
+
         results.append({
-            "score": hit.score,
-            "title": doc.get("Title"),
-            "body": doc.get("Body"),
-            "subreddit": doc.get("Subreddit"),
-            "username": doc.get("Username"),
-            "postID": doc.get("PostID"),
-            "url": doc.get("PostURL")
+            "score":       hit.score,
+            "final_score": final_score,
+            "title":       title,
+            "body":        doc.get("Body"),
+            "subreddit":   doc.get("Subreddit"),
+            "username":    doc.get("Username"),
+            "postID":      doc.get("PostID"),
+            "url":         doc.get("PostURL")
         })
-    #print(top 10 results)
+
+    # sort by combined score
+    results.sort(key=lambda d: d["final_score"], reverse=True)
     return results[:10]
 
-# main indexing entry point
 if __name__ == "__main__":
     if lucene.getVMEnv() is None:
         lucene.initVM(vmargs=['-Djava.awt.headless=true'])
     # create_index('reddit_lucene_index/', load_files("redditFiles/"))
-    retrieve('reddit_lucene_index/', 'senate')
+    print(retrieve('reddit_lucene_index/', 'senate'))
