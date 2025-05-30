@@ -34,4 +34,4 @@ def output():
     return render_template('output.html', lucene_output=docs)
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(port=8888, debug=True)

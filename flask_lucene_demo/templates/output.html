@@ -12,28 +12,132 @@
     <p><input type="submit" value="Search Again" /></p>
 </form> -->
 
+
+<!-- test -->
+
 <!DOCTYPE html>
 <html>
 <head>
     <title>Search Results</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Noto Sans', sans-serif;
+            background-color: #f6f7f8;
+            margin: 40px auto;
+            max-width: 800px;
+            color: #1a1a1b;
+        }
+        .search-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+        .home-icon {
+            font-size: 24px;
+            color: #ff4500;
+            text-decoration: none;
+            margin-right: 10px;
+            margin-bottom: 30px;
+        }
+        .home-icon:hover {
+            color: #e03d00;
+        }
+        .search-bar {
+            display: flex;
+            align-items: center;
+        }
+
+        .search-bar input[type="text"] {
+            width: 500px;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 999px;
+            outline: none;
+        }
+
+        .search-bar button {
+            padding: 12px 20px;
+            margin-left: 10px;
+            font-size: 16px;
+            background-color: #ff4500;
+            border: none;
+            border-radius: 999px;
+            color: white;
+            cursor: pointer;
+        }
+
+        .search-bar button:hover {
+            background-color: #e03d00;
+        }
+
+        h1 {
+            color: #ff4500;
+            text-align: center;
+        }
+        .result {
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 12px;
+            transition: background-color 0.3s ease;
+        }
+        .result:hover {
+            background-color: #ffe5d0;
+        }
+        .title {
+            font-size: 1.25em;
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #181c1f;
+        }
+        .subreddit {
+            font-size: 0.9em;
+            color: #333d42;
+            margin-bottom: 8px;
+        }
+        .body {
+            margin-bottom: 8px;
+        }
+        a {
+            color: #0079d3;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
+    
+    <div class="search-bar">
+        <a href="/input" class="home-icon" title="Home Page">
+            <i class="fas fa-home"></i>
+        </a>
+        <form action="/output" method="POST" class="search-bar">
+            <input type="text" name="query" placeholder="Search Reddit..." required>
+            <button type="submit">Search</button>
+        </form>
+    </div>    
+
     <h1>Results</h1>
     {% if lucene_output %}
-        <ul>
         {% for doc in lucene_output %}
-            <li>
-                <strong>{{ doc.title }}</strong><br>
-                <em>{{ doc.subreddit }}</em><br>
-                {{ doc.body }}<br>
-                <a href="{{ doc.url }}">View Post</a><br>
-                <hr>
-            </li>
+            <div class="result">
+                <div class="title">{{ doc.title }}</div>
+                <div class="subreddit">r/{{ doc.subreddit }}</div>
+                <div class="body">{{ doc.body }}</div>
+                <a href="https://www.reddit.com{{ doc.url }}" target="_blank">View Post</a>
+                <p><strong>Score:</strong> {{ "%.3f"|format(doc.score) }}</p>
+            </div>
         {% endfor %}
-        </ul>
     {% else %}
-        <p>No results found.</p>
+        <p>No results found. Please try again.</p>
     {% endif %}
-    <a href="/input">Search again</a>
+
 </body>
 </html>

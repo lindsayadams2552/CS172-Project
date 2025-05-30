@@ -1,27 +1,72 @@
-<!-- <!DOCTYPE html>
-<html>
-<head>
-    <title>Reddit Lucene Search</title>
-</head>
-<body>
-    <h1>Search Reddit Posts</h1>
-    <form action="/output" method="POST">
-        <p>Query: <input type="text" name="query" required /></p>
-        <p><input type="submit" value="Search" /></p>
-    </form>
-</body>
-</html> -->
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Reddit Search</title>
-</head>
-<body>
-    <h1>Reddit Lucene Search</h1>
-    <form action="/output" method="POST">
-        <input type="text" name="query" placeholder="Enter your search query" required>
-        <button type="submit">Search</button>
-    </form>
-</body>
-</html>
+ <!DOCTYPE html>
+ <html>
+ <head>
+     <title>Reddit Search</title>
+     <!-- <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet"> -->
+     <style>
+         body {
+             margin: 0;
+             height: 100vh;
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             font-family: 'Verdana', sans-serif;
+             background-color: #f4f4f4;
+             color: white;
+         }
+         .container {
+             text-align: center;
+             background-color: #FF5700;
+             padding: 40px;
+             border-radius: 12px;
+             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+             font-family: Verdana, sans-serif;
+         }
+         .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+         }
+         .logo {
+            height: 65px;
+            width: auto;
+            margin-bottom: 15px;
+         }
+         input[type="text"] {
+             padding: 12px 20px;
+             width: 500px;
+             font-size: 16px;
+             border: none;
+             border-radius: 9999px;
+             outline: none;
+             font-family: Verdana, sans-serif;
+         }
+         button {
+             padding: 12px 20px;
+             font-size: 16px;
+             margin-left: 10px;
+             cursor: pointer;
+             border: none;
+             border-radius: 8px;
+             background-color: white;
+             color: #FF5700;
+             font-weight: bold;
+         }
+     </style>
+ </head>
+ <body>
+     <div class="container">
+         <div class="header">
+            <img src="{{ url_for('static', filename='white_reddit_logo.png') }}" alt="Reddit Logo" class="logo">
+            <h1>Reddit Lucene Search</h1>
+        </div>
+        <form action="/output" method="POST">
+            <input type="text" name="query" placeholder="Search Reddit..." required>
+            <button type="submit">Search</button>
+        </form>
+     </div>
+ </body>
+ </html>
+ 
