@@ -130,7 +130,9 @@
             <div class="result">
                 <div class="title">{{ doc.title }}</div>
                 <div class="subreddit">r/{{ doc.subreddit }}</div>
-                <div class="body">{{ doc.body }}</div>
+                <div class="body">
+                    {{ doc.body[:300] }}{% if doc.body|length > 300 %}...{% endif %}
+                </div>
                 <a href="https://www.reddit.com{{ doc.url }}" target="_blank">View Post</a>
                 <p><strong>Score:</strong> {{ "%.3f"|format(doc.score) }}</p>
             </div>
