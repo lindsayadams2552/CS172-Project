@@ -1,14 +1,9 @@
-import lucene
-import os
-import sys
+import lucene, os, sys
 from flask import request, Flask, render_template, redirect, url_for
-#from pylucene_reddit import retrieve  # Import retrieve function
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # ensures current dir is in path
-
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from pylucene_reddit import retrieve
-app = Flask(__name__)
 
-# Ensure the JVM is initialized
+app = Flask(__name__)
 lucene.initVM(vmargs=['-Djava.awt.headless=true'])
 
 @app.route("/")
@@ -21,16 +16,25 @@ def input():
 
 @app.route("/output", methods=['POST'])
 def output():
-    form_data = request.form
-    query = form_data['query']
-    print(f"Query received: {query}")
+    form = request.form
+    query = form['query']
+    rank_by = form.get('rank_by', 'combined')
+    try:
+        w_r = float(form.get('w_relevance', 0.5))
+        w_t = float(form.get('w_time',      0.3))
+        w_v = float(form.get('w_votes',     0.2))
+    except ValueError:
+        w_r, w_t, w_v = 0.5, 0.3, 0.2
 
-    # Attach thread to JVM
+    # attach JVM to this thread
     lucene.getVMEnv().attachCurrentThread()
 
-    # Use your Reddit index directory
-    docs = retrieve('reddit_lucene_index/', query)
-
+    docs = retrieve(
+        'reddit_lucene_index/',
+        query,
+        rank_by=rank_by,
+        weights=(w_r, w_t, w_v)
+    )
     return render_template('output.html', lucene_output=docs)
 
 if __name__ == "__main__":
