@@ -127,10 +127,19 @@ def retrieve(index_dir, user_query):
     # print(type(user_query))
     # query = query_parser.parse(user_query) # use .parse() correctly on the instance
 
-    topDocs = searcher.search(query, 10).scoreDocs
+    topDocs = searcher.search(query, 30).scoreDocs
     results = []
+
+    seen_titles = set()  # Track PostIDs to filter duplicates
+
+    # No duplicate results
     for hit in topDocs:
         doc = searcher.doc(hit.doc)
+        title_text = doc.get("Title")
+        if title_text in seen_titles:
+            continue
+        seen_titles.add(title_text)
+    
         results.append({
             "score": hit.score,
             "title": doc.get("Title"),
@@ -140,8 +149,8 @@ def retrieve(index_dir, user_query):
             "postID": doc.get("PostID"),
             "url": doc.get("PostURL")
         })
-    #print(results)
-    return results
+    #print(top 10 results)
+    return results[:10]
 
 # main indexing entry point
 if __name__ == "__main__":
