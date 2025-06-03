@@ -1,20 +1,3 @@
-<!-- {% for item in lucene_output %}
-    <h2>Score: {{ item['score'] }}</h2>
-    <h3>Title: {{ item['title'] }}</h3>
-    <p><strong>Body:</strong> {{ item['body'] }}</p>
-    <p><strong>Subreddit:</strong> {{ item['subreddit'] }}</p>
-    <p><strong>Author:</strong> {{ item['username'] }}</p>
-    <p><a href="https://www.reddit.com{{ item['url'] }}" target="_blank">View Post</a></p>
-    <hr>
-{% endfor %}
-
-<form action="/input" method="GET">
-    <p><input type="submit" value="Search Again" /></p>
-</form> -->
-
-
-<!-- test -->
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -22,6 +5,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
+    <!-- aesthetics -->
     <style>
         body {
             font-family: 'Noto Sans', sans-serif;
@@ -114,6 +98,7 @@
 </head>
 <body>
     
+    <!-- research bar -->
     <div class="search-bar">
         <a href="/input" class="home-icon" title="Home Page">
             <i class="fas fa-home"></i>
@@ -126,6 +111,7 @@
 
     <h1>Results</h1>
 
+    <!-- result screen -->
     {% if lucene_output %}
         {% for doc in lucene_output %}
             <div class="result">

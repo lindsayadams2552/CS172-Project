@@ -21,12 +21,11 @@ def output():
     rank_by = form.get('rank_by', 'combined')
     try:
         w_r = float(form.get('w_relevance', 0.5))
-        w_t = float(form.get('w_time',      0.3))
-        w_v = float(form.get('w_votes',     0.2))
+        w_t = float(form.get('w_time', 0.3))
+        w_v = float(form.get('w_votes', 0.2))
     except ValueError:
         w_r, w_t, w_v = 0.5, 0.3, 0.2
 
-    # attach JVM to this thread
     lucene.getVMEnv().attachCurrentThread()
 
     docs = retrieve(
@@ -38,4 +37,4 @@ def output():
     return render_template('output.html', lucene_output=docs)
 
 if __name__ == "__main__":
-    app.run(port=8888, debug=True)
+    app.run(port=8000, debug=True)
