@@ -6,7 +6,7 @@ This project was built in two phases as part of **CS172 – Information Retrieva
 ## Project Structure
 - **Part A – Reddit Post Collector** (`PRAW.py`, JSON data files)  
 - **Part B – Search Engine & Web Interface** (`pylucene_reddit.py`, `flask_lucene_demo/`)  
-- **Reports**: Detailed writeups for both parts are included in this repo.  
+- **Reports**: Detailed writeups for both parts are included in this repo  
   - [Part A: Reddit Post Collector](Reports/PartA_RedditPostCollector_Report.pdf)
   - [Part B: Search Interface](Reports/PartB_SearchInterface_Report.pdf)
 
@@ -19,18 +19,18 @@ Collect ~500MB of Reddit posts & comments from pop culture subreddits (movies, T
 
 ### Features
 - Crawler Architecture  
-- PRAW API for authentication & streaming posts.  
-- Subreddit Crawler pulls from `top`, `hot`, `new`, `rising`.  
-- BeautifulSoup fetches HTML `<title>` tags for external links.  
-- Multithreading with `ThreadPoolExecutor` for faster crawling.  
-- Duplicate handling via `seen_posts` set.  
+- PRAW API for authentication & streaming posts  
+- Subreddit Crawler pulls from `top`, `hot`, `new`, `rising`  
+- BeautifulSoup fetches HTML `<title>` tags for external links  
+- Multithreading with `ThreadPoolExecutor` for faster crawling  
+- Duplicate handling via `seen_posts` set  
 - Data Storage:  
-  - JSONL format, 10MB per file, up to 500MB total.  
-  - Stores subreddit, title, body, author, upvotes, permalink, comments, category, and external link titles.  
-- Data Structures: dictionaries (post metadata), sets (deduplication), lists (subreddits, streams, comments).  
+  - JSONL format, 10MB per file, up to 500MB total  
+  - Stores subreddit, title, body, author, upvotes, permalink, comments, category, and external link titles  
+- Data Structures: dictionaries (post metadata), sets (deduplication), lists (subreddits, streams, comments)  
 
 ### Run Instructions
-1. Ideally, you should include a crawler.bat (Windows) or crawler.sh (Unix/Linux) executable file that takes as input all necessary parameters.
+1. Ideally, you should include a crawler.bat (Windows) or crawler.sh (Unix/Linux) executable file that takes as input all necessary parameters
 2. Install python3
 3. Install python libraries: pip install praw requests beautifulsoup4
 4. Change directory into CS172-Project: cd CS172-Project
@@ -44,21 +44,21 @@ Index the collected Reddit dataset using PyLucene and build a Flask-based web ap
 
 ### Features
 - Indexing with PyLucene
-- Inverted index stores title, body, comments, upvotes, and timestamp.
-- BM25Similarity for relevance ranking.
-- Indexing flexibility: title/body tokenized, comments indexed, upvotes numeric.
+- Inverted index stores title, body, comments, upvotes, and timestamp
+- BM25Similarity for relevance ranking
+- Indexing flexibility: title/body tokenized, comments indexed, upvotes numeric
 - Search & Ranking
-- User queries matched across title, body, and comments.
+- User queries matched across title, body, and comments
 
 ### Ranking Modes
 - **Relevance** (BM25)
 - **Time** (newer posts rank higher)
 - **Votes** (upvote counts, scaled)
-- **Combined** (weighted formula: relevance + recency + votes).
+- **Combined** (weighted formula: relevance + recency + votes)
 
 ## Web Interface (Flask)
-- `input.html` → search form with ranking options.
-- `output.html` → top 10 results, showing snippets, metadata, and Reddit links.
+- `input.html` → search form with ranking options
+- `output.html` → top 10 results, showing snippets, metadata, and Reddit links
 
 ### Run Instructions
 1. Ideally, you should include an indexer.bat (Windows) or indexer.sh (Unix/Linux) executable file that takes as input all necessary parameters Example: [user@server] ./indexer.sh <output-dir>
@@ -72,7 +72,7 @@ Index the collected Reddit dataset using PyLucene and build a Flask-based web ap
 ---
 
 ## Demo
-- Screenshots & example queries are included in the reports.
+- Screenshots & example queries are included in the reports
 - Video Demo: Included in report
   - [Part A: Reddit Post Collector](Reports/PartA_RedditPostCollector_Report.pdf)
   - [Part B: Search Interface](Reports/PartB_SearchInterface_Report.pdf)
@@ -90,10 +90,10 @@ Index the collected Reddit dataset using PyLucene and build a Flask-based web ap
 
 ## Summary
 This project demonstrates the full pipeline of an information retrieval system:
-- Data Collection – 500MB Reddit dataset (JSON).
-- Indexing – PyLucene inverted index.
-- Search & Ranking – BM25 + recency + upvotes.
-- Web Application – Flask frontend for interactive querying.
+- Data Collection – 500MB Reddit dataset (JSON)
+- Indexing – PyLucene inverted index
+- Search & Ranking – BM25 + recency + upvotes
+- Web Application – Flask frontend for interactive querying
 
 ---
 
